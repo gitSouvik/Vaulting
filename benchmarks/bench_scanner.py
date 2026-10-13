@@ -11,7 +11,6 @@ Outputs a table with throughput (MB/s) and latency (µs/line) for each approach.
 
 from __future__ import annotations
 
-import os
 import random
 import string
 import sys

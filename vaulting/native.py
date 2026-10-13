@@ -16,11 +16,10 @@ equivalents so that the rest of the package continues to work.
 from __future__ import annotations
 
 import ctypes
-import os
 import platform
 import threading
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Optional
 
 
 # ---------------------------------------------------------------------------

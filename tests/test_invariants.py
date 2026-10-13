@@ -32,6 +32,8 @@ from vaulting.native import (
     shamir_combine,
     shamir_split,
 )
+from vaulting.vault import Vault
+from vaulting.saga import RotationSaga, SagaState, _TRANSITIONS
 
 
 # ── Shamir roundtrip ────────────────────────────────────────────────────────
@@ -158,8 +160,6 @@ def test_consttime_eq_agrees_with_python(a: bytes, b: bytes) -> None:
 # 5-6  Vault invariants
 # ---------------------------------------------------------------------------
 
-from vaulting.vault import Vault
-
 
 def _fresh_vault() -> tuple[Vault, str]:
     """Return a fresh vault backed by a temp DB."""
@@ -261,8 +261,6 @@ def test_vault_rollback_restores_previous_value(
 # ---------------------------------------------------------------------------
 # 7  Saga state machine invariants
 # ---------------------------------------------------------------------------
-
-from vaulting.saga import RotationSaga, SagaState, _TRANSITIONS
 
 
 @given(

@@ -32,7 +32,6 @@ Usage (instrumenting vault operations)::
 from __future__ import annotations
 
 import io
-import socket
 import threading
 import time
 from collections import defaultdict

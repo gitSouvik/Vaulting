@@ -3,13 +3,11 @@ tests/test_mtls.py — Tests for mutual TLS certificate generation and server/cl
 """
 
 import ssl
-import pytest
 from vaulting.mtls import (
     generate_ca,
     generate_cert,
     make_server_ssl_context,
     make_client_ssl_context,
-    MTLSServer,
 )
 
 

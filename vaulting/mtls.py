@@ -33,6 +33,7 @@ All cert generation uses the cryptography library (no openssl subprocess).
 from __future__ import annotations
 
 import datetime
+from contextlib import contextmanager
 import ipaddress
 import os
 import ssl
@@ -306,7 +307,6 @@ class MTLSServer(HTTPServer):
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
 
-from contextlib import contextmanager
 
 
 @contextmanager

@@ -36,7 +36,8 @@ class WatcherTests(unittest.TestCase):
         self.assertEqual(self.v.get_active("db")["version"], 1)   # rolled back
 
     def test_tick_scans_and_acts(self):
-        import os, tempfile
+        import os
+        import tempfile
         d = tempfile.mkdtemp()
         with open(os.path.join(d, "x.log"), "w") as fh:
             fh.write("pw value-1234567890\n")

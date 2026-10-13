@@ -2,10 +2,8 @@
 tests/test_metrics.py — Tests for Prometheus metrics registry, collectors, and HTTP endpoint
 """
 
-import pytest
 from vaulting.metrics import (
     REGISTRY,
-    MetricsServer,
     generate_metrics_page,
     timer,
 )

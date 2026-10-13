@@ -15,10 +15,7 @@ simulate process crashes at various checkpoints.
 from __future__ import annotations
 
 import os
-import sqlite3
 import tempfile
-import threading
-from unittest.mock import MagicMock, patch
 
 import pytest
 

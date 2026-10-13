@@ -3,7 +3,6 @@
 Each tick: scheduled rotations -> expire old grace versions -> scan for leaks -> let the agent act.
 """
 import threading
-import time
 from typing import Iterable, Optional
 
 

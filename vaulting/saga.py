@@ -377,7 +377,8 @@ class RotationSaga:
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    import tempfile, os
+    import tempfile
+    import os
 
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
         db = tf.name
