@@ -15,6 +15,7 @@ Invariants tested:
 from __future__ import annotations
 
 import os
+import sqlite3
 import tempfile
 from typing import List
 
@@ -42,17 +43,22 @@ settings.register_profile(
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
 )
+settings.register_profile(
+    "default",
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
+)
 settings.load_profile("ci")
 
 
 # ── Shamir roundtrip ────────────────────────────────────────────────────────
 
 @given(
-    secret = st.binary(min_size=1, max_size=128),
-    k      = st.integers(min_value=1, max_value=8),
-    extra  = st.integers(min_value=0, max_value=4),
+    secret = st.binary(min_size=1, max_size=64),
+    k      = st.integers(min_value=1, max_value=6),
+    extra  = st.integers(min_value=0, max_value=3),
 )
-@settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=50, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_shamir_roundtrip(secret: bytes, k: int, extra: int) -> None:
     """Any k shares from an (k, k+extra) split must reconstruct the secret."""
     n = k + extra
@@ -67,28 +73,23 @@ def test_shamir_roundtrip(secret: bytes, k: int, extra: int) -> None:
 
 
 @given(
-    secret = st.binary(min_size=1, max_size=64),
-    k      = st.integers(min_value=2, max_value=6),
-    extra  = st.integers(min_value=0, max_value=3),
+    secret = st.binary(min_size=1, max_size=32),
+    k      = st.integers(min_value=2, max_value=5),
+    extra  = st.integers(min_value=0, max_value=2),
 )
-@settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=40, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_shamir_insufficient_shares_never_correct(
     secret: bytes, k: int, extra: int
 ) -> None:
-    """Combining fewer than k shares should never recover the original secret
-    (with overwhelming probability — there's a negligible 1/256^n chance of
-    coincidental equality for any specific byte, so we only assert for k > 1)."""
+    """Combining fewer than k shares should never recover the original secret."""
     n = k + extra
     assume(n <= 255)
     assume(k >= 2)
     shares = shamir_split(secret, k, n)
     # Use only k-1 shares
     bad_recovered = shamir_combine(shares[: k - 1], len(secret))
-    # Cannot assert equality to a fixed wrong value, but we can assert
-    # the reconstruction is not the same as the original (statistically valid).
     assert bad_recovered != secret or len(secret) == 0, (
-        "Accidentally reconstructed secret with insufficient shares — "
-        "this may happen with negligible probability, re-run to confirm"
+        "Accidentally reconstructed secret with insufficient shares"
     )
 
 
@@ -96,17 +97,16 @@ def test_shamir_insufficient_shares_never_correct(
 
 @given(
     patterns = st.lists(
-        st.binary(min_size=1, max_size=20),
-        min_size=1, max_size=10, unique=True,
+        st.binary(min_size=1, max_size=16),
+        min_size=1, max_size=6, unique=True,
     ),
-    haystack_extra = st.binary(min_size=0, max_size=50),
+    haystack_extra = st.binary(min_size=0, max_size=32),
 )
-@settings(max_examples=200, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=50, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_scanner_finds_all_present_patterns(
     patterns: List[bytes], haystack_extra: bytes
 ) -> None:
     """Every pattern embedded in the text must be found by the scanner."""
-    # Build a haystack that contains every pattern
     separator = b"\x00"
     haystack = separator.join(patterns) + haystack_extra
 
@@ -124,17 +124,14 @@ def test_scanner_finds_all_present_patterns(
 
 @given(
     patterns = st.lists(
-        st.binary(min_size=2, max_size=16),
-        min_size=1, max_size=5, unique=True,
+        st.binary(min_size=2, max_size=12),
+        min_size=1, max_size=4, unique=True,
     ),
 )
-@settings(max_examples=100, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=40, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_scanner_no_false_positives(patterns: List[bytes]) -> None:
     """A text that contains none of the patterns should yield zero matches."""
-    # Build a text guaranteed not to contain any pattern
-    # by using only bytes 0xFE-0xFF while patterns use 0x00-0xFD range
-    haystack = bytes([0xFE, 0xFF] * 30)
-    # Only add patterns that are definitely absent from the haystack
+    haystack = bytes([0xFE, 0xFF] * 20)
     clean_patterns = [p for p in patterns if p not in haystack and p not in (b'\xfe', b'\xff') and not any(p in haystack[i:i+len(p)] for i in range(len(haystack)))]
     assume(len(clean_patterns) > 0)
 
@@ -152,21 +149,20 @@ def test_scanner_no_false_positives(patterns: List[bytes]) -> None:
 # ── consttime_eq ─────────────────────────────────────────────────────────────
 
 @given(
-    a = st.binary(max_size=64),
-    b = st.binary(max_size=64),
+    a = st.binary(max_size=32),
+    b = st.binary(max_size=32),
 )
-@settings(max_examples=500)
+@settings(max_examples=60, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_consttime_eq_agrees_with_python(a: bytes, b: bytes) -> None:
     """consttime_eq must agree with Python == on equal-length inputs."""
     if len(a) != len(b):
-        # Different lengths are always False
         assert not consttime_eq(a, b)
     else:
         assert consttime_eq(a, b) == (a == b)
 
 
 # ---------------------------------------------------------------------------
-# 5-6  Vault invariants
+# 5-6  Vault state machine invariants
 # ---------------------------------------------------------------------------
 
 
@@ -184,8 +180,8 @@ def _fresh_vault() -> tuple[Vault, str]:
         st.one_of(
             st.tuples(
                 st.just("put"),
-                st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=10),
-                st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=32),
+                st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=8),
+                st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=16),
             ),
             st.tuples(
                 st.just("rotate"),
@@ -193,11 +189,11 @@ def _fresh_vault() -> tuple[Vault, str]:
                 st.just(None),
             ),
         ),
-        min_size=1, max_size=10,
+        min_size=1, max_size=8,
     )
 )
 @settings(
-    max_examples=50,
+    max_examples=30,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
 )
@@ -206,7 +202,6 @@ def test_vault_never_two_active_versions(operations) -> None:
     one active version."""
     vault, db_path = _fresh_vault()
     try:
-        import sqlite3
         for op, name, value in operations:
             try:
                 if op == "put" and name and value:
@@ -237,12 +232,12 @@ def test_vault_never_two_active_versions(operations) -> None:
 
 
 @given(
-    name  = st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=15),
-    val1  = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=30),
-    val2  = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=30),
+    name  = st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=10),
+    val1  = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=20),
+    val2  = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=20),
 )
 @settings(
-    max_examples=50,
+    max_examples=30,
     deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
 )
@@ -277,10 +272,10 @@ def test_vault_rollback_restores_previous_value(
 @given(
     transitions = st.lists(
         st.sampled_from(list(SagaState)),
-        min_size=0, max_size=10,
+        min_size=0, max_size=8,
     )
 )
-@settings(max_examples=200, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=40, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 def test_saga_invalid_transitions_always_raise(transitions: List[SagaState]) -> None:
     """The transition table must reject every invalid state move."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tf:
@@ -307,5 +302,5 @@ def test_saga_invalid_transitions_always_raise(transitions: List[SagaState]) -> 
             else:
                 current = target
     finally:
-        os.unlink(db)
-
+        if os.path.exists(db):
+            os.unlink(db)

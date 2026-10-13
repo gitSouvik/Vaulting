@@ -89,37 +89,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install build tools (Linux)
+        run: sudo apt-get update && sudo apt-get install -y gcc make libc6-dev
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Download compiled library
-        uses: actions/download-artifact@v4
-        with:
-          name: libvaulting-ubuntu-latest
-          path: vaulting/
-        continue-on-error: true  # fall back to Python-only if lib not present
+      - name: Build C library
+        run: |
+          cd c_src && make all
 
       - name: Install dependencies
         run: |
           pip install -e "."
           pip install pytest hypothesis
 
-      - name: Build C library (fallback if artifact missing)
-        run: |
-          if [ ! -f vaulting/libvaulting_core.so ]; then
-            cd c_src && make all
-          fi
-        continue-on-error: true
-
       - name: Run unit tests
         run: pytest tests/ -q --tb=short --ignore=tests/test_invariants.py
 
       - name: Run property-based tests (Hypothesis)
-        run: |
-          pytest tests/test_invariants.py -v --tb=short \
-            --hypothesis-seed=0
+        run: pytest tests/test_invariants.py -v --tb=short
 
       - name: Run chaos tests
         run: pytest tests/test_chaos.py -v --tb=short
