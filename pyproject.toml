@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vaulting"
+version = "0.2.0"
+description = "High-assurance secrets management engine with C-accelerated leak detection, Shamir unseal quorum, crash-safe rotation sagas, and Prometheus observability."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+authors = [
+    { name = "Vaulting Contributors" }
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: C",
+    "Topic :: Security :: Cryptography",
+]
+dependencies = [
+    "cryptography>=42.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "hypothesis>=6.90.0",
+    "ruff>=0.4.0",
+    "mypy>=1.9.0",
+]
+test = [
+    "pytest>=8.0.0",
+    "hypothesis>=6.90.0",
+]
+
+[project.scripts]
+vaulting = "vaulting.cli:main"
+
+[tool.setuptools]
+packages = ["vaulting"]
+
+[tool.setuptools.package-data]
+vaulting = ["schema.sql", "libvaulting_core.*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

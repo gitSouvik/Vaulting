@@ -1,0 +1,166 @@
+{
+  "__inputs": [],
+  "__requires": [
+    {"type": "grafana", "id": "grafana", "name": "Grafana", "version": "11.0.0"},
+    {"type": "datasource", "id": "prometheus", "name": "Prometheus", "version": "1.0.0"},
+    {"type": "panel", "id": "timeseries", "name": "Time series", "version": ""}
+  ],
+  "annotations": {"list": []},
+  "description": "Vaulting secrets vault — operational dashboard",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"tooltip": {"mode": "single"}},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus"},
+          "expr": "rate(vaulting_rotations_total{outcome=\"success\"}[5m])",
+          "legendFormat": "rotations/s (success)"
+        },
+        {
+          "datasource": {"type": "prometheus"},
+          "expr": "rate(vaulting_rotations_total{outcome=\"failure\"}[5m])",
+          "legendFormat": "rotations/s (failure)"
+        }
+      ],
+      "title": "Rotation Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}, "unit": "s"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "id": 2,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus"},
+          "expr": "histogram_quantile(0.99, rate(vaulting_rotation_duration_seconds_bucket[5m]))",
+          "legendFormat": "p99 rotation latency"
+        },
+        {
+          "datasource": {"type": "prometheus"},
+          "expr": "histogram_quantile(0.50, rate(vaulting_rotation_duration_seconds_bucket[5m]))",
+          "legendFormat": "p50 rotation latency"
+        }
+      ],
+      "title": "Rotation Latency (p50/p99)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 3,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus"},
+          "expr": "rate(vaulting_sentinel_scans_total[1m])",
+          "legendFormat": "scans/s"
+        },
+        {
+          "datasource": {"type": "prometheus"},
+          "expr": "rate(vaulting_sentinel_hits_total[1m])",
+          "legendFormat": "hits/s (leaks detected)"
+        }
+      ],
+      "title": "Sentinel Activity",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "thresholds"}, "thresholds": {"steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}},
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 8},
+      "id": 4,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto", "textMode": "auto"},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus"},
+          "expr": "vaulting_vault_sealed",
+          "legendFormat": "Sealed"
+        }
+      ],
+      "title": "Vault Sealed",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}},
+        "overrides": []
+      },
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 8},
+      "id": 5,
+      "options": {"reduceOptions": {"calcs": ["lastNotNull"]}, "orientation": "auto"},
+      "targets": [
+        {
+          "datasource": {"type": "prometheus"},
+          "expr": "vaulting_secrets_total",
+          "legendFormat": "Secrets"
+        }
+      ],
+      "title": "Total Secrets",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+      "fieldConfig": {
+        "defaults": {"color": {"mode": "palette-classic"}, "custom": {"lineWidth": 2}, "unit": "s"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 12},
+      "id": 6,
+      "targets": [
+        {
+          "datasource": {"type": "prometheus"},
+          "expr": "rate(vaulting_http_requests_total[1m])",
+          "legendFormat": "{{method}} {{path}} {{status}}"
+        }
+      ],
+      "title": "HTTP API Request Rate",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 39,
+  "tags": ["vaulting", "security"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Vaulting Operations",
+  "uid": "vaulting-ops",
+  "version": 1
+}

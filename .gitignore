@@ -1,0 +1,62 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C compilation artifacts
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+c_src/_*
+c_src/*.o
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Testing & Static Analysis
+.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Databases and runtime state
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Keys, certificates, and credentials
+*.key
+*.pem
+*.crt
+tls/certs/
+tls/ca/
+master.key
+
+# Logs
+*.log
+logs/
+
+# Operating System & IDEs
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Exclude any marketing/draft notes
+*linkedin*
