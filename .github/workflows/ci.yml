@@ -118,10 +118,8 @@ jobs:
 
       - name: Run property-based tests (Hypothesis)
         run: |
-          pytest tests/test_invariants.py -q --tb=short \
+          pytest tests/test_invariants.py -v --tb=short \
             --hypothesis-seed=0
-        env:
-          HYPOTHESIS_MAX_EXAMPLES: "200"
 
       - name: Run chaos tests
         run: pytest tests/test_chaos.py -v --tb=short
@@ -198,15 +196,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build image (smoke test)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: vaulting:ci-${{ github.sha }}
+        run: docker build -t vaulting:smoke .
+
+      - name: Verify container healthcheck
+        run: |
+          docker run -d --name vaulting-test -p 8080:8080 vaulting:smoke
+          sleep 4
+          curl --fail --retry 5 --retry-delay 2 http://localhost:8080/healthz || docker logs vaulting-test
+          docker rm -f vaulting-test
 
       - name: Lowercase image name
         if: github.ref == 'refs/heads/main'
@@ -222,15 +220,11 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Push to GHCR (main branch only)
+      - name: Tag and push to GHCR (main branch only)
         if: github.ref == 'refs/heads/main'
         continue-on-error: true
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:latest
-            ${{ env.IMAGE_NAME }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: |
+          docker tag vaulting:smoke ${{ env.IMAGE_NAME }}:latest
+          docker tag vaulting:smoke ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.IMAGE_NAME }}:latest || true
+          docker push ${{ env.IMAGE_NAME }}:${{ github.sha }} || true

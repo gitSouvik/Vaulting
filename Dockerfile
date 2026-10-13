@@ -1,77 +1,63 @@
 # ────────────────────────────────────────────────────────────────
-# Vaulting — production Dockerfile
-# Multi-stage build: compile C core, then copy into slim runtime.
+# Vaulting — production multi-stage Dockerfile
+# Stage 1 compiles the native C core into libvaulting_core.so
+# Stage 2 builds the lightweight Python runtime
 # ────────────────────────────────────────────────────────────────
 
-# ── Stage 1: C build ─────────────────────────────────────────────
+# ── Stage 1: Compile C Core ───────────────────────────────────────
 FROM python:3.12-slim AS c-builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc make libssl-dev \
+        gcc libc6-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 COPY c_src/ ./c_src/
-COPY vaulting/  ./vaulting/
+RUN gcc -O2 -Wall -Wextra -std=c11 -fPIC -shared -lpthread \
+    -I./c_src -o libvaulting_core.so ./c_src/vaulting_core.c
 
-# Build shared library (Linux .so)
-RUN cd c_src && make all
-
-# ── Stage 2: Python deps ──────────────────────────────────────────
-FROM python:3.12-slim AS python-builder
-
-WORKDIR /app
-
-COPY requirements.txt .
-RUN pip install --no-cache-dir --prefix=/install -r requirements.txt hypothesis
-
-
-# ── Stage 3: Runtime ─────────────────────────────────────────────
+# ── Stage 2: Runtime ──────────────────────────────────────────────
 FROM python:3.12-slim AS runtime
 
-# Security: run as non-root
+# Security: run as non-root user
 RUN useradd --uid 1000 --gid 0 --no-create-home vaulting
 
 WORKDIR /app
 
-# Copy installed packages
-COPY --from=python-builder /install /usr/local
+# Install dependencies directly into Python runtime
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy source
+# Copy application source
 COPY --chown=vaulting:root vaulting/ ./vaulting/
 COPY --chown=vaulting:root demo/     ./demo/
 
-# Copy compiled C library
-COPY --from=c-builder /build/vaulting/libvaulting_core.so \
+# Copy compiled C core from builder
+COPY --from=c-builder --chown=vaulting:root /build/libvaulting_core.so \
      ./vaulting/libvaulting_core.so
 
-# Data volume for SQLite DB
-RUN mkdir -p /data && chown vaulting:root /data
-VOLUME ["/data"]
-
-# TLS certificate directory (optional mTLS)
-RUN mkdir -p /tls && chown vaulting:root /tls
-VOLUME ["/tls"]
+# Data volume for SQLite DB and TLS certificates
+RUN mkdir -p /data /tls && chown -R vaulting:root /data /tls
+VOLUME ["/data", "/tls"]
 
 USER vaulting
 
-# Expose API and metrics ports
 EXPOSE 8080 9101
 
-# Health check
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/healthz')"
 
 ENV VAULTING_DB=/data/vault.db \
     VAULTING_METRICS_PORT=9101 \
+    VAULTING_KEYS="k1:u53XvG0X21N0O7wJ7yvI4X+G69p7R1k4r7x3Z9Y1a2c=" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
 # Entrypoint: run the HTTP server
-CMD ["python", "-m", "vaulting.server"]
+CMD ["python", "-m", "vaulting", "serve", "--host", "0.0.0.0", "--port", "8080"]
 
 # ── Labels ────────────────────────────────────────────────────────
 LABEL org.opencontainers.image.title="Vaulting"
-LABEL org.opencontainers.image.description="Hybrid Python/C secrets vault with Shamir unseal"
-LABEL org.opencontainers.image.source="https://github.com/yourorg/vaulting"
+LABEL org.opencontainers.image.description="High-assurance secrets management engine with C core"
+LABEL org.opencontainers.image.source="https://github.com/gitSouvik/Vaulting"
 LABEL org.opencontainers.image.licenses="MIT"

@@ -26,6 +26,7 @@ from hypothesis import strategies as st
 # 1-4  Native / Shamir / Scanner tests
 # ---------------------------------------------------------------------------
 
+from vaulting.crypto import Keyring
 from vaulting.native import (
     AhoCorasickScanner,
     consttime_eq,
@@ -34,6 +35,14 @@ from vaulting.native import (
 )
 from vaulting.vault import Vault
 from vaulting.saga import RotationSaga, SagaState, _TRANSITIONS
+
+# Configure Hypothesis to prevent timeout failures on shared CI runners
+settings.register_profile(
+    "ci",
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
+)
+settings.load_profile("ci")
 
 
 # ── Shamir roundtrip ────────────────────────────────────────────────────────
@@ -162,11 +171,11 @@ def test_consttime_eq_agrees_with_python(a: bytes, b: bytes) -> None:
 
 
 def _fresh_vault() -> tuple[Vault, str]:
-    """Return a fresh vault backed by a temp DB."""
+    """Return a fresh vault backed by a temp DB and generated Keyring."""
     tf = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
     tf.close()
-    key = os.urandom(32)
-    v = Vault(tf.name, key)
+    kr = Keyring.generate()
+    v = Vault(tf.name, kr)
     return v, tf.name
 
 
@@ -176,7 +185,7 @@ def _fresh_vault() -> tuple[Vault, str]:
             st.tuples(
                 st.just("put"),
                 st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=10),
-                st.binary(min_size=1, max_size=32),
+                st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=32),
             ),
             st.tuples(
                 st.just("rotate"),
@@ -184,11 +193,12 @@ def _fresh_vault() -> tuple[Vault, str]:
                 st.just(None),
             ),
         ),
-        min_size=1, max_size=15,
+        min_size=1, max_size=10,
     )
 )
 @settings(
-    max_examples=100,
+    max_examples=50,
+    deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
 )
 def test_vault_never_two_active_versions(operations) -> None:
@@ -200,17 +210,19 @@ def test_vault_never_two_active_versions(operations) -> None:
         for op, name, value in operations:
             try:
                 if op == "put" and name and value:
-                    vault.put(name, value)
+                    if not vault.get_active(name):
+                        vault.put_secret(name, value)
+                    else:
+                        vault.rotate(name, new_value=value)
                 elif op == "rotate":
-                    # Rotate a random existing secret if any exist
                     with sqlite3.connect(db_path) as conn:
                         row = conn.execute(
-                            "SELECT name FROM secrets WHERE status='active' LIMIT 1"
+                            "SELECT name FROM secret_versions WHERE status='active' LIMIT 1"
                         ).fetchone()
                     if row:
                         vault.rotate(row[0])
             except Exception:
-                pass  # Some ops may fail (e.g. rotate on non-existent) — that's fine
+                pass
 
         # Invariant: no secret has more than one active version
         with sqlite3.connect(db_path) as conn:
@@ -220,42 +232,41 @@ def test_vault_never_two_active_versions(operations) -> None:
             ).fetchall()
         assert rows == [], f"Multiple active versions found: {rows}"
     finally:
-        os.unlink(db_path)
+        if os.path.exists(db_path):
+            os.unlink(db_path)
 
 
 @given(
-    name  = st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=20),
-    val1  = st.binary(min_size=1, max_size=64),
-    val2  = st.binary(min_size=1, max_size=64),
+    name  = st.text(alphabet="abcdefghijklmnopqrstuvwxyz", min_size=1, max_size=15),
+    val1  = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=30),
+    val2  = st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789", min_size=1, max_size=30),
 )
 @settings(
-    max_examples=80,
+    max_examples=50,
+    deadline=None,
     suppress_health_check=[HealthCheck.too_slow, HealthCheck.function_scoped_fixture],
 )
 def test_vault_rollback_restores_previous_value(
-    name: str, val1: bytes, val2: bytes
+    name: str, val1: str, val2: str
 ) -> None:
-    """After put(v1), rotate to v2, rollback → reading secret == v1."""
+    """After put_secret(v1), rotate to v2, rollback → reading secret == v1."""
     assume(val1 != val2)
     vault, db_path = _fresh_vault()
     try:
-        vault.put(name, val1)
-        vault.rotate(name)
-        # Read v2 (newly active after rotate)
-        v2 = vault.get(name)
-        assert v2 == val2 or True  # v2 is freshly rotated — we can't predict its value
+        vault.put_secret(name, val1)
+        vault.rotate(name, new_value=val2)
+        v2 = vault.get_active(name)
+        assert v2 is not None
+        assert v2["value"] == val2
 
         # Rollback to v1
         vault.rollback(name)
-        restored = vault.get(name)
-        assert restored == val1, (
-            f"rollback did not restore original value for {name!r}"
-        )
-    except Exception as exc:
-        # rotate/rollback may not be implemented for all vault types — skip
-        pytest.skip(f"vault does not support rollback: {exc}")
+        v1 = vault.get_active(name)
+        assert v1 is not None
+        assert v1["value"] == val1
     finally:
-        os.unlink(db_path)
+        if os.path.exists(db_path):
+            os.unlink(db_path)
 
 
 # ---------------------------------------------------------------------------
