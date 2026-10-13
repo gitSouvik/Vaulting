@@ -22,14 +22,9 @@ FROM python:3.12-slim AS python-builder
 
 WORKDIR /app
 
-# Install build deps for cryptography wheel
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc libssl-dev cargo pkg-config \
-    && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt hypothesis
 
-COPY pyproject.toml .
-RUN pip install --no-cache-dir --prefix=/install ".[server]" 2>/dev/null \
-    || pip install --no-cache-dir --prefix=/install cryptography hypothesis
 
 # ── Stage 3: Runtime ─────────────────────────────────────────────
 FROM python:3.12-slim AS runtime

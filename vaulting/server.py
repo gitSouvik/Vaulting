@@ -74,7 +74,7 @@ def make_server(vault, host: str = "127.0.0.1", port: int = 0, ttl: int = 30, pr
         def do_GET(self):
             if self._limited():
                 return
-            if self.path == "/v1/health":
+            if self.path in ("/v1/health", "/health", "/healthz"):
                 return self._send(200, {"status": "ok"})
             if self.path == "/v1/metrics":
                 tok = self._bearer()
@@ -152,3 +152,10 @@ def serve_in_thread(server: ThreadingHTTPServer) -> threading.Thread:
     t = threading.Thread(target=server.serve_forever, daemon=True)
     t.start()
     return t
+
+
+if __name__ == "__main__":
+    import sys
+    from vaulting.cli import main
+    sys.argv = [sys.argv[0], "serve"] + sys.argv[1:]
+    main()
